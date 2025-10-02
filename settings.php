@@ -71,6 +71,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['change_password'])) {
     <title>Settings - Fantasy MMA</title>
     <style>
         body {
+			background-color: #EAEAEA;
+			background-image: linear-gradient(to bottom, #FFFFFF, #B22222);
             font-family: Arial, sans-serif;
             display: flex;
             flex-direction: column;

@@ -116,7 +116,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['leagueID'])) {
     <meta name="viewport" content="width=device-device-width, initial-scale=1.0">
     <title>Join League - Fantasy MMA</title>
     <style>
-        body {
+        body { 
+			background-color: #EAEAEA;
+			background-image: linear-gradient(to bottom, #FFFFFF, #B22222);
             font-family: Arial, sans-serif;
             display: flex;
             flex-direction: column;

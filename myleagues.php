@@ -49,7 +49,9 @@ if ($stmt = $conn->prepare($sql)) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Leagues - Fantasy MMA</title>
     <style>
-        body {
+        body{
+			background-color: #EAEAEA;
+			background-image: linear-gradient(to bottom, #FFFFFF, #B22222);
             font-family: Arial, sans-serif;
             display: flex;
             flex-direction: column;
@@ -106,6 +108,19 @@ if ($stmt = $conn->prepare($sql)) {
         .logout:hover {
             text-decoration: underline;
         }
+		.view-league {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 8px 16px;
+            background-color: #1877f2;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .view-league:hover {
+            background-color: #166fe5;
+        }
     </style>
 </head>
 <body>
@@ -123,6 +138,7 @@ if ($stmt = $conn->prepare($sql)) {
                     <p>Maximum Teams: <?php echo htmlspecialchars($league['MaxTeams']); ?></p>
                     <p>Type: <?php echo $league['PrivOrPub'] ? 'Private' : 'Public'; ?></p>
                     <p>Role: <?php echo $league['LeagueManager'] ? 'Manager' : 'Member'; ?></p>
+					<a href="leaguehome.php?leagueid=<?php echo htmlspecialchars($league['LeagueID']); ?>" class="view-league">View League</a>
                 </div>
             <?php endforeach; ?>
         <?php endif; ?>
