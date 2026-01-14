@@ -418,6 +418,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 <?php endforeach; ?>
             <?php endif; ?>
         </div>
+		<!-- Start Draft Section -->
+        <div class="form-section">
+            <h2>Start Draft</h2>
+            <form method="POST" action="leagueDraft.php?leagueid=<?php echo htmlspecialchars($leagueID); ?>">
+                <p>Start the draft for all teams in the league.</p>
+                <button type="submit" name="start_draft" class="submit-button">Start Draft</button>
+            </form>
+        </div>
         <!-- Delete League -->
         <div class="form-section">
             <h2>Delete League</h2>
