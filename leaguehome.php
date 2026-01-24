@@ -186,6 +186,9 @@ if ($stmtMembers = $conn->prepare($sqlMembers)) {
                 </div>
             <?php endforeach; ?>
         <?php endif; ?>
+		<?php if (!$isLeagueManager): ?>
+			<a href="leagueDraft.php?leagueid=<?php echo htmlspecialchars($leagueID); ?>" class="back-link">Join Draft</a>
+		<?php endif; ?>
         <a href="myleagues.php" class="back-link">Go Back to My Leagues</a>
     </div>
 </body>
