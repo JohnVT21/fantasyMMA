@@ -22,6 +22,59 @@ if (!isset($_GET['leagueid']) || !is_numeric($_GET['leagueid'])) {
 
 $leagueID = intval($_GET['leagueid']);
 
+// Handle drop fighter request 
+$message = "";
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['drop_fighter'])) {
+    $fighterID = intval($_POST['fighterID']);
+    $teamID = null;
+
+    // Get user's team ID
+    $sqlTeam = "SELECT TeamID FROM Fantasy_Team WHERE UserID = ? AND LeagueID = ?";
+    if ($stmtTeam = $conn->prepare($sqlTeam)) {
+        $stmtTeam->bind_param("ii", $_SESSION['userID'], $leagueID);
+        $stmtTeam->execute();
+        $resultTeam = $stmtTeam->get_result();
+        if ($rowTeam = $resultTeam->fetch_assoc()) {
+            $teamID = $rowTeam['TeamID'];
+        }
+        $stmtTeam->close();
+    }
+
+    if ($teamID && $fighterID) {
+        $conn->begin_transaction();
+        try {
+            // Verify fighter belongs to this team (security check)
+            $checkSql = "SELECT COUNT(*) as count FROM Picks_belong WHERE TeamID = ? AND FighterID = ?";
+            if ($stmtCheck = $conn->prepare($checkSql)) {
+                $stmtCheck->bind_param("ii", $teamID, $fighterID);
+                $stmtCheck->execute();
+                $rowCheck = $stmtCheck->get_result()->fetch_assoc();
+                if ($rowCheck['count'] == 0) {
+                    throw new Exception("Fighter is not on your team.");
+                }
+                $stmtCheck->close();
+            }
+
+            // Drop the fighter
+            $dropSql = "DELETE FROM Picks_belong WHERE TeamID = ? AND FighterID = ?";
+            if ($stmtDrop = $conn->prepare($dropSql)) {
+                $stmtDrop->bind_param("ii", $teamID, $fighterID);
+                if ($stmtDrop->execute()) {
+                    $conn->commit();
+                    $message = "Fighter dropped successfully.";
+                } else {
+                    throw new Exception("Error dropping fighter.");
+                }
+                $stmtDrop->close();
+            }
+        } catch (Exception $e) {
+            $conn->rollback();
+            $message = $e->getMessage();
+        }
+    } else {
+        $message = "Invalid request.";
+    }
+}
 // Check if user is league manager
 $isLeagueManager = false;
 $sqlManager = "SELECT LeagueManager FROM Fantasy_Team WHERE UserID = ? AND LeagueID = ?";
@@ -186,6 +239,20 @@ if ($team) {
             margin: 5px 0;
             color: #555;
         }
+		.drop-btn {
+            top: 15px;
+            right: 15px;
+            background-color: #dc3545;
+            color: white;
+            padding: 8px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .drop-btn:hover {
+            background-color: #c82333;
+        }
         .error {
             color: red;
             font-size: 12px;
@@ -216,6 +283,13 @@ if ($team) {
                 <a href="ManagerTools.php?leagueid=<?php echo htmlspecialchars($leagueID); ?>" class="nav-tab">League Manager Tools</a>
             <?php endif; ?>
         </div>
+		
+		<?php if (!empty($message)): ?>
+            <div class="<?php echo strpos($message, 'successfully') !== false ? 'success' : 'error'; ?>">
+                <?php echo htmlspecialchars($message); ?>
+            </div>
+        <?php endif; ?>
+		
         <?php if (isset($error)): ?>
             <div class="error"><?php echo htmlspecialchars($error); ?></div>
         <?php else: ?>
@@ -223,6 +297,7 @@ if ($team) {
                 <h3><?php echo htmlspecialchars($team['TeamName']); ?></h3>
                 <p>Record: <?php echo htmlspecialchars($team['Wins']) . ' - ' . htmlspecialchars($team['Losses']); ?></p>
             </div>
+			
             <h2>Drafted Fighters</h2>
             <?php if (empty($draftedFighters)): ?>
                 <p class="no-fighters">No fighters drafted yet.</p>
@@ -235,6 +310,7 @@ if ($team) {
                             <th>Weight Class</th>
                             <th>Avg Strikes</th>
                             <th>Avg Takedowns</th>
+							<th>Drop Fighter</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -251,6 +327,12 @@ if ($team) {
                                 <td><?php echo htmlspecialchars($fighter['WeightClass']); ?></td>
                                 <td><?php echo htmlspecialchars($fighter['AvgStrikes']); ?></td>
                                 <td><?php echo htmlspecialchars($fighter['AvgTakedowns']); ?></td>
+								<td>
+									<form method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to drop this fighter?');">
+                                        <input type="hidden" name="fighterID" value="<?php echo $fighter['FighterID']; ?>">
+                                        <button type="submit" name="drop_fighter" class="drop-btn">Drop</button>
+                                    </form>
+                                </td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
