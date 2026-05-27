@@ -314,32 +314,42 @@ if ($team) {
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($draftedFighters as $fighter): ?>
-                            <tr>
-                                <td>
-                                    <a href="individual_fighters.php?leagueid=<?php echo htmlspecialchars($leagueID); ?>&fighterid=<?php echo htmlspecialchars($fighter['FighterID']); ?>" 
-                                       class="fighter-link">
-                                        <?php echo htmlspecialchars($fighter['FullName']); ?> 
-                                        "<?php echo htmlspecialchars($fighter['NickName'] ?? ''); ?>"
-                                    </a>
-                                </td>
-                                <td><?php echo htmlspecialchars($fighter['Wins']) . '-' . htmlspecialchars($fighter['Losses']) . '-' . htmlspecialchars($fighter['NoContests']); ?></td>
-                                <td><?php echo htmlspecialchars($fighter['WeightClass']); ?></td>
-                                <td><?php echo htmlspecialchars($fighter['AvgStrikes']); ?></td>
-                                <td><?php echo htmlspecialchars($fighter['AvgTakedowns']); ?></td>
-								<td>
-									<form method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to drop this fighter?');">
-                                        <input type="hidden" name="fighterID" value="<?php echo $fighter['FighterID']; ?>">
-                                        <button type="submit" name="drop_fighter" class="drop-btn">Drop</button>
-                                    </form>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
+                        <?php 
+						$totalSlots = 8;
+						for ($i = 0; $i < $totalSlots; $i++): 
+							$fighter = isset($draftedFighters[$i]) ? $draftedFighters[$i] : null;
+						?>
+							<tr>
+								<?php if ($fighter): ?>
+									<td>
+										<a href="individual_fighters.php?leagueid=<?php echo htmlspecialchars($leagueID); ?>&fighterid=<?php echo htmlspecialchars($fighter['FighterID']); ?>" 
+										class="fighter-link">
+											<?php echo htmlspecialchars($fighter['FullName']); ?> 
+											"<?php echo htmlspecialchars($fighter['NickName'] ?? ''); ?>"
+										</a>
+									</td>
+									<td><?php echo htmlspecialchars($fighter['Wins']) . '-' . htmlspecialchars($fighter['Losses']) . '-' . htmlspecialchars($fighter['NoContests']); ?></td>
+									<td><?php echo htmlspecialchars($fighter['WeightClass']); ?></td>
+									<td><?php echo htmlspecialchars($fighter['AvgStrikes']); ?></td>
+									<td><?php echo htmlspecialchars($fighter['AvgTakedowns']); ?></td>
+									<td>
+										<form method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to drop this fighter?');">
+											<input type="hidden" name="fighterID" value="<?php echo $fighter['FighterID']; ?>">
+											<button type="submit" name="drop_fighter" class="drop-btn">Drop</button>
+										</form>
+									</td>
+								<?php else: ?>
+									<td colspan="5" class="empty-slot">Empty Slot</td>
+									<td class="empty-slot">—</td>
+								<?php endif; ?>
+							</tr>
+                        <?php endfor; ?>
                     </tbody>
                 </table>
             <?php endif; ?>
-        <?php endif; ?>
-        <a href="myleagues.php" class="back-link">Go Back to My Leagues</a>
+		<?php endif; ?>
+			
+		<a href="myleagues.php" class="back-link">Go Back to My Leagues</a>
     </div>
 </body>
 </html>
