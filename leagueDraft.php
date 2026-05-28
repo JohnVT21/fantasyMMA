@@ -22,7 +22,72 @@ if (!isset($_GET['leagueid']) || !is_numeric($_GET['leagueid'])) {
 
 $leagueID = intval($_GET['leagueid']);
 
-$isAjax = isset($_GET['ajax']) && $_GET['ajax'] == 1;
+
+//AJAX
+if (isset($_GET['ajax']) && $_GET['ajax'] == 1) {
+    header('Content-Type: application/json');
+    
+    // Re-fetch fresh data for AJAX
+    $draftActive = 0; $currentTurn = 0; $picksMade = 0; $currentTurnStartTime = 0;
+    $draftOrderJson = ''; $leagueName = '';
+    
+    $sqlLeague = "SELECT LeagueName, DraftActive, DraftOrder, CurrentTurn, PicksMade, CurrentTurnStartTime 
+                  FROM Leagues WHERE LeagueID = ?";
+    $stmt = $conn->prepare($sqlLeague);
+    $stmt->bind_param("i", $leagueID);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    if ($row) {
+        $draftActive = $row['DraftActive'];
+        $draftOrderJson = $row['DraftOrder'];
+        $currentTurn = $row['CurrentTurn'];
+        $picksMade = $row['PicksMade'];
+        $currentTurnStartTime = $row['CurrentTurnStartTime'];
+    }
+    $stmt->close();
+
+    $draftOrder = json_decode($draftOrderJson, true) ?? [];
+    $currentTeamID = $draftOrder[$currentTurn] ?? null;
+
+    // Get current team name
+    $currentTeamName = null;
+    if ($currentTeamID) {
+        $sqlTeam = "SELECT TeamName FROM Fantasy_Team WHERE TeamID = ?";
+        $stmt = $conn->prepare($sqlTeam);
+        $stmt->bind_param("i", $currentTeamID);
+        $stmt->execute();
+        $currentTeamName = $stmt->get_result()->fetch_assoc()['TeamName'] ?? null;
+        $stmt->close();
+    }
+
+    // Available fighters
+    $availableFighters = [];
+    if ($draftActive) {
+        $sqlFighters = "SELECT FighterID, FullName, WeightClass, Wins, Losses, NoContests
+                        FROM Fighters WHERE FighterID NOT IN (
+                            SELECT FighterID FROM Picks_belong 
+                            WHERE TeamID IN (SELECT TeamID FROM Fantasy_Team WHERE LeagueID = ?)
+                        )";
+        $stmt = $conn->prepare($sqlFighters);
+        $stmt->bind_param("i", $leagueID);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        while ($row = $result->fetch_assoc()) {
+            $availableFighters[] = $row;
+        }
+        $stmt->close();
+    }
+
+    echo json_encode([
+        'draftActive' => $draftActive,
+        'currentTeam' => $currentTeamName,
+        'isMyTurn' => $isMyTurn,
+        'timeElapsed' => time() - $currentTurnStartTime,
+        'availableFighters' => $availableFighters,
+        'draftComplete' => $picksMade >= count($draftOrder)
+    ]);
+    exit;
+}
 
 // 3. Check if user has a team in the league
 $userTeamID = null;
@@ -178,21 +243,7 @@ if ($draftActive) {
         $message = "Error fetching fighters: " . $conn->error;
     }
 }
-// 11. Ajax 
-if ($isAjax) {
-    header('Content-Type: application/json');
-    echo json_encode([
-        'draftActive' => $draftActive,
-        'currentTurn' => $currentTurn,
-        'picksMade' => $picksMade,
-        'timeElapsed' => time() - $currentTurnStartTime,
-        'currentTeam' => $currentTeam ? $currentTeam['TeamName'] : null,
-        'isMyTurn' => $isMyTurn,
-        'availableFighters' => $availableFighters,
-        'draftComplete' => $picksMade >= $totalTeams
-    ]);
-    exit;
-}
+
 // 12. Handle draft pick submission
 $message = "";
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['select_fighter']) && $isMyTurn && $draftActive) {
@@ -387,7 +438,7 @@ $timeElapsed = time() - $currentTurnStartTime;
         <div id="draft-content">
             <?php if ($draftActive && $currentTeam): ?>
                 <div class="current-team">
-                    <p>Current Team: <strong id="current-team-name"><?= htmlspecialchars($currentTeam['TeamName']) ?></strong></p>
+                    Current Team: <strong id="current-team-name"><?= htmlspecialchars($currentTeam['TeamName']) ?></strong>
                 </div>
                 <div class="timer">
                     Time Remaining: <span id="timer"><?= max(45 - $timeElapsed, 0) ?></span> seconds
@@ -396,87 +447,76 @@ $timeElapsed = time() - $currentTurnStartTime;
                 <?php if ($isMyTurn): ?>
                     <div class="fighter-list" id="fighter-list">
                         <h2>Available Fighters</h2>
-                        <?= renderFighters($availableFighters, $leagueID) ?>
+                        <?php foreach ($availableFighters as $fighter): ?>
+                            <div class="fighter">
+                                <div>
+                                    <p><strong><?= htmlspecialchars($fighter['FullName']) ?></strong></p>
+                                    <p><?= htmlspecialchars($fighter['WeightClass']) ?> • 
+                                       <?= $fighter['Wins'] . '-' . $fighter['Losses'] . '-' . $fighter['NoContests'] ?></p>
+                                </div>
+                                <form method="POST">
+                                    <input type="hidden" name="fighterID" value="<?= $fighter['FighterID'] ?>">
+                                    <button type="submit" name="select_fighter" class="submit-button">Select Fighter</button>
+                                </form>
+                            </div>
+                        <?php endforeach; ?>
                     </div>
                 <?php else: ?>
-                    <p id="not-my-turn">It's not your turn. Please wait...</p>
+                    <p id="waiting-message">It's not your turn. Waiting...</p>
                 <?php endif; ?>
-            <?php elseif (!$draftActive): ?>
+            <?php else: ?>
                 <p>Draft has not started or is completed.</p>
             <?php endif; ?>
         </div>
 
-        <a href="leaguehome.php?leagueid=<?= htmlspecialchars($leagueID) ?>" class="back-link">Go Back to League Home</a>
+        <a href="leaguehome.php?leagueid=<?= $leagueID ?>" class="back-link">Go Back to League Home</a>
     </div>
 
     <script>
         let timeLeft = <?= max(45 - $timeElapsed, 0) ?>;
-        let pollInterval;
-
-        function renderFighters(fighters) {
-            let html = '<h2>Available Fighters</h2>';
-            if (fighters.length === 0) {
-                html += '<p>No fighters available to draft.</p>';
-            } else {
-                fighters.forEach(f => {
-                    html += `
-                        <div class="fighter">
-                            <div>
-                                <p><strong>${f.FullName}</strong></p>
-                                <p>${f.WeightClass} • ${f.Wins}-${f.Losses}-${f.NoContests}</p>
-                            </div>
-                            <form method="POST" action="">
-                                <input type="hidden" name="fighterID" value="${f.FighterID}">
-                                <button type="submit" name="select_fighter" class="submit-button">Select Fighter</button>
-                            </form>
-                        </div>`;
-                });
-            }
-            return html;
-        }
 
         function updateDraft() {
-            fetch(`leagueDraft.php?leagueid=${<?= $leagueID ?>}&ajax=1`)
-                .then(response => response.json())
+            fetch(`leagueDraft.php?leagueid=<?= $leagueID ?>&ajax=1`)
+                .then(r => r.json())
                 .then(data => {
                     if (data.draftComplete) {
                         window.location.href = `leaguehome.php?leagueid=<?= $leagueID ?>`;
                         return;
                     }
 
-                    // Update current team
                     document.getElementById('current-team-name').textContent = data.currentTeam || 'Unknown';
-
-                    // Update timer
                     timeLeft = Math.max(45 - data.timeElapsed, 0);
                     document.getElementById('timer').textContent = timeLeft;
 
-                    // Update fighters if it's my turn
-                    if (data.isMyTurn) {
-                        document.getElementById('fighter-list').innerHTML = renderFighters(data.availableFighters);
-                    } else {
-                        document.getElementById('not-my-turn').style.display = 'block';
-                    }
-
-                    // Refresh page if turn changed significantly
-                    if (timeLeft <= 0) {
-                        window.location.reload();
+                    if (data.isMyTurn && data.availableFighters) {
+                        let html = '<h2>Available Fighters</h2>';
+                        data.availableFighters.forEach(f => {
+                            html += `
+                                <div class="fighter">
+                                    <div>
+                                        <p><strong>${f.FullName}</strong></p>
+                                        <p>${f.WeightClass} • ${f.Wins}-${f.Losses}-${f.NoContests}</p>
+                                    </div>
+                                    <form method="POST">
+                                        <input type="hidden" name="fighterID" value="${f.FighterID}">
+                                        <button type="submit" name="select_fighter" class="submit-button">Select Fighter</button>
+                                    </form>
+                                </div>`;
+                        });
+                        document.getElementById('fighter-list').innerHTML = html;
                     }
                 })
-                .catch(err => console.error('Poll error:', err));
+                .catch(err => console.error(err));
         }
 
-        // Start polling
-        pollInterval = setInterval(updateDraft, 3000);
+        // Poll every 3 seconds
+        setInterval(updateDraft, 3000);
 
-        // Initial timer countdown
-        const timerElement = document.getElementById('timer');
-        if (timerElement) {
-            setInterval(() => {
-                if (timeLeft > 0) timeLeft--;
-                timerElement.textContent = timeLeft;
-            }, 1000);
-        }
+        // Local timer
+        setInterval(() => {
+            if (timeLeft > 0) timeLeft--;
+            document.getElementById('timer').textContent = timeLeft;
+        }, 1000);
     </script>
 </body>
 </html>
