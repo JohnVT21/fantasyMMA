@@ -189,7 +189,7 @@ $draftOrder = json_decode($draftOrderJson, true) ?? [];
 // 8. Handle timer expiration on page load auto skip
 $currentTime = time();
 $timeElapsed = $currentTime - $currentTurnStartTime;
-if ($draftActive && $timeElapsed >= 45 && $picksMade < $totalTeams) {  // Assuming one round for now
+if ($draftActive && $timeElapsed >= 45) {  // Assuming one round for now
     // Skip to next team
     $conn->begin_transaction();
     try {
